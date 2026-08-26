@@ -1,0 +1,9 @@
+{
+  "seed": 42,
+  "max_length": 128,
+  "train_size": 22500,
+  "validation_size": 2500,
+  "test_size": 25000,
+  "vocabulary_size": 47676,
+  "lowercase": true
+}

@@ -1,0 +1,23 @@
+{
+  "accuracy": 0.75992,
+  "precision": 0.7607125662012518,
+  "recall": 0.7584,
+  "f1": 0.7595545228747697,
+  "confusion_matrix": [
+    [
+      9518,
+      2982
+    ],
+    [
+      3020,
+      9480
+    ]
+  ],
+  "num_examples": 25000,
+  "evaluation_loss": 0.4963575260734558,
+  "average_confidence": 0.780815601348877,
+  "class_distribution": {
+    "0": 12500,
+    "1": 12500
+  }
+}
