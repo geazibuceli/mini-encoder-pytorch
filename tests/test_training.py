@@ -66,12 +66,17 @@ def test_cli_reproducible_and_infers_sequence_length(tmp_path, monkeypatch):
     for split in ("train", "validation", "test"):
         (data / f"{split}.jsonl").write_text("\n".join(json.dumps(row) for row in records))
     config = tmp_path / "config.yaml"
-    config.write_text("seed: 42\nmodel:\n  embedding_dimension: 8\n  heads: 2\n  layers: 1\n  feedforward_dimension: 16\ntraining:\n  epochs: 2\n  batch_size: 2\n  device: cpu\n")
+    config.write_text(
+        "seed: 42\nmodel:\n  embedding_dimension: 8\n  heads: 2\n  layers: 1\n  feedforward_dimension: 16\ntraining:\n  epochs: 2\n  batch_size: 2\n  device: cpu\n"
+    )
     payloads = []
     for run in range(2):
         path = tmp_path / f"model{run}.pt"
-        monkeypatch.setattr(sys, "argv", ["train", "--config", str(config), "--data-dir", str(data),
-                                         "--checkpoint", str(path)])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["train", "--config", str(config), "--data-dir", str(data), "--checkpoint", str(path)],
+        )
         train.main()
         restored, payload = load_model(path, vocabulary)
         assert restored.position.encoding.shape[1] == 256
@@ -91,3 +96,32 @@ def test_invalid_training_inputs():
         train.train_model(model, [0], [0], epochs=0)
     with pytest.raises(ValueError, match="empty"):
         train.train_model(model, [], [0])
+
+
+def test_accuracy_selection_preserves_loss_metadata(tmp_path, monkeypatch):
+    model = MeanEmbeddingClassifier(5)
+    results = iter(
+        [
+            {"loss": 0.2, "labels": [0, 1], "predictions": [0, 0]},
+            {"loss": 0.4, "labels": [0, 1], "predictions": [0, 1]},
+        ]
+    )
+
+    def epoch(model, loader, optimizer=None, *args):
+        if optimizer is not None:
+            optimizer.zero_grad()
+            model.embedding.weight.sum().backward()
+            optimizer.step()
+            return {"loss": 1.0}
+        return next(results)
+
+    monkeypatch.setattr(train, "run_epoch", epoch)
+    path = tmp_path / "accuracy.pt"
+    train.train_model(model, [0], [0], epochs=2, checkpoint_path=path, selection_metric="accuracy")
+    payload = torch.load(path, weights_only=True)
+    assert payload["epoch"] == 2
+    assert payload["best_validation_loss"] == 0.2
+    assert payload["validation_loss"] == 0.4
+    assert payload["selection_metric"] == "accuracy"
+    assert payload["selection_score"] == 1.0
+    assert len(json.loads(path.with_suffix(".history.json").read_text())) == 2

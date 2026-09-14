@@ -17,4 +17,4 @@ class SinusoidalPositionalEncoding(nn.Module):
     def forward(self, inputs):
         if inputs.size(1) > self.encoding.size(1):
             raise ValueError("Sequence length exceeds positional-encoding capacity.")
-        return inputs + self.encoding[:, :inputs.size(1)]
+        return inputs + self.encoding[:, : inputs.size(1)]

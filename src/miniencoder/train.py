@@ -3,6 +3,8 @@
 import argparse
 import json
 import math
+import time
+from pathlib import Path
 
 import torch
 
@@ -14,15 +16,37 @@ from .utils import select_device, set_seed
 
 
 def build_model(config, vocabulary_size, padding_id=0):
+    if not isinstance(config, dict):
+        raise ValueError("Model configuration must be a mapping.")
+    validate_config(config if "model" in config else {"model": config})
     model_config = config.get("model", config)
     if model_config.get("type", "transformer") == "baseline":
-        return MeanEmbeddingClassifier(vocabulary_size, model_config.get("embedding_dimension", 64),
-                                       model_config.get("hidden_dimension", 64), padding_id,
-                                       model_config.get("dropout", 0.1))
-    return TransformerClassifier(vocabulary_size, padding_id=padding_id, **{
-        key: model_config[key] for key in ("embedding_dimension", "heads", "layers", "feedforward_dimension",
-                                           "max_length", "pooling", "positional_encoding", "attention_backend", "dropout")
-        if key in model_config})
+        return MeanEmbeddingClassifier(
+            vocabulary_size,
+            model_config.get("embedding_dimension", 64),
+            model_config.get("hidden_dimension", 64),
+            padding_id,
+            model_config.get("dropout", 0.1),
+        )
+    return TransformerClassifier(
+        vocabulary_size,
+        padding_id=padding_id,
+        **{
+            key: model_config[key]
+            for key in (
+                "embedding_dimension",
+                "heads",
+                "layers",
+                "feedforward_dimension",
+                "max_length",
+                "pooling",
+                "positional_encoding",
+                "attention_backend",
+                "dropout",
+            )
+            if key in model_config
+        },
+    )
 
 
 def run_epoch(model, loader, optimizer=None, device="cpu", clip_norm=1.0):
@@ -33,7 +57,9 @@ def run_epoch(model, loader, optimizer=None, device="cpu", clip_norm=1.0):
     context = torch.enable_grad() if training else torch.inference_mode()
     with context:
         for batch in loader:
-            inputs = {key: batch[key].to(device) for key in ("input_ids", "attention_mask", "label")}
+            inputs = {
+                key: batch[key].to(device) for key in ("input_ids", "attention_mask", "label")
+            }
             logits = model(inputs["input_ids"], inputs["attention_mask"])
             loss = criterion(logits, inputs["label"])
             if training:
@@ -45,35 +71,107 @@ def run_epoch(model, loader, optimizer=None, device="cpu", clip_norm=1.0):
             logits_history.append(logits.detach().cpu())
             predictions.extend(logits.argmax(1).cpu().tolist())
             labels.extend(inputs["label"].cpu().tolist())
-        return {"loss": total_loss / max(1, len(labels)), "predictions": predictions, "labels": labels,
-            "logits": torch.cat(logits_history) if logits_history else torch.empty((0, 2))}
+        return {
+            "loss": total_loss / max(1, len(labels)),
+            "predictions": predictions,
+            "labels": labels,
+            "logits": torch.cat(logits_history) if logits_history else torch.empty((0, 2)),
+        }
 
 
-def train_model(model, train_loader, validation_loader, epochs=1, learning_rate=3e-4, weight_decay=1e-2,
-                device="cpu", clip_norm=1.0, checkpoint_path=None, seed=42, vocabulary_metadata=None):
+def train_model(
+    model,
+    train_loader,
+    validation_loader,
+    epochs=1,
+    learning_rate=3e-4,
+    weight_decay=1e-2,
+    device="cpu",
+    clip_norm=1.0,
+    checkpoint_path=None,
+    seed=42,
+    vocabulary_metadata=None,
+    selection_metric="loss",
+):
     """Train an initialized model; seed before constructing it for reproducible weights."""
     if epochs < 1:
         raise ValueError("epochs must be positive.")
+    if selection_metric not in {"loss", "accuracy"}:
+        raise ValueError("selection_metric must be loss or accuracy.")
     if len(train_loader) == 0 or len(validation_loader) == 0:
         raise ValueError("Training and validation loaders must not be empty.")
     set_seed(seed)
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, max(1, epochs))
-    history, best_loss = [], math.inf
+    history, best_loss, best_score = [], math.inf, -math.inf
     for epoch in range(1, epochs + 1):
+        started = time.perf_counter()
         train_result = run_epoch(model, train_loader, optimizer, device, clip_norm)
         validation_result = run_epoch(model, validation_loader, None, device, clip_norm)
         scheduler.step()
-        record = {"epoch": epoch, "train_loss": train_result["loss"], "validation_loss": validation_result["loss"]}
+        record = {
+            "epoch": epoch,
+            "train_loss": train_result["loss"],
+            "validation_loss": validation_result["loss"],
+        }
+        if "labels" in validation_result:
+            record["validation_accuracy"] = sum(
+                a == b
+                for a, b in zip(validation_result["labels"], validation_result["predictions"])
+            ) / len(validation_result["labels"])
+        if not math.isfinite(validation_result["loss"]):
+            raise ValueError("Validation loss is not finite.")
+        print(json.dumps(record), flush=True)
         history.append(record)
-        if validation_result["loss"] < best_loss:
-            best_loss = validation_result["loss"]
+        if checkpoint_path:
+            history_path = Path(checkpoint_path).with_suffix(".history.json")
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
+        best_loss = min(best_loss, validation_result["loss"])
+        score = (
+            -record["validation_loss"]
+            if selection_metric == "loss"
+            else record["validation_accuracy"]
+        )
+        if score > best_score:
+            best_score = score
             if checkpoint_path:
-                save_checkpoint(checkpoint_path, model, optimizer, scheduler, epoch=epoch,
-                                global_step=epoch * len(train_loader), best_validation_loss=best_loss,
-                                training_history=history, random_seed=seed,
-                                vocabulary_metadata=vocabulary_metadata)
+                save_checkpoint(
+                    checkpoint_path,
+                    model,
+                    optimizer,
+                    scheduler,
+                    epoch=epoch,
+                    global_step=epoch * len(train_loader),
+                    best_validation_loss=best_loss,
+                    validation_loss=record["validation_loss"],
+                    validation_accuracy=record.get("validation_accuracy"),
+                    selection_metric=selection_metric,
+                    selection_score=record["validation_loss"]
+                    if selection_metric == "loss"
+                    else score,
+                    training_history=history,
+                    random_seed=seed,
+                    vocabulary_metadata=vocabulary_metadata,
+                    training_config={
+                        "epochs": epochs,
+                        "learning_rate": learning_rate,
+                        "weight_decay": weight_decay,
+                        "gradient_clip_norm": clip_norm,
+                        "batch_size": getattr(train_loader, "batch_size", None),
+                        "selection_metric": selection_metric,
+                    },
+                    runtime={
+                        "torch": str(torch.__version__),
+                        "cuda": torch.version.cuda,
+                        "device": str(device),
+                    },
+                )
+        print(
+            f"Epoch {epoch} completed in {time.perf_counter() - started:.1f}s on {device}",
+            flush=True,
+        )
     return history
 
 
@@ -85,24 +183,48 @@ def main():
     args = parser.parse_args()
     config = validate_config(load_config(args.config))
     from .pipeline import make_loader, read_prepared_data
-    metadata, vocabulary, splits = read_prepared_data(args.data_dir, split_names=("train", "validation"))
+
+    metadata, vocabulary, splits = read_prepared_data(
+        args.data_dir, split_names=("train", "validation")
+    )
     model_config = config.setdefault("model", {})
     model_config.setdefault("max_length", metadata["max_length"])
-    if (model_config.get("type", "transformer") != "baseline"
-            and model_config.get("positional_encoding", True)
-            and model_config["max_length"] < metadata["max_length"]):
+    if (
+        model_config.get("type", "transformer") != "baseline"
+        and model_config.get("positional_encoding", True)
+        and model_config["max_length"] < metadata["max_length"]
+    ):
         raise ValueError("model.max_length must be at least the prepared data max_length.")
+    torch.set_num_threads(
+        config.get("training", {}).get("threads", min(4, torch.get_num_threads()))
+    )
+    metadata["vocabulary_sha256"] = vocabulary.fingerprint()
+    metadata["tokenizer"] = "regex-v1"
     set_seed(config.get("seed", 42))
     model = build_model(config, len(vocabulary.token_to_id), vocabulary.pad_id)
     train_config = config.get("training", {})
-    train_loader = make_loader(splits["train"], vocabulary, metadata, train_config.get("batch_size", 32), True)
-    validation_loader = make_loader(splits["validation"], vocabulary, metadata, train_config.get("batch_size", 32))
-    history = train_model(model, train_loader, validation_loader, train_config.get("epochs", 1),
-                          train_config.get("learning_rate", 3e-4), train_config.get("weight_decay", 1e-2),
-                          str(select_device(train_config.get("device", "auto"))),
-                          train_config.get("gradient_clip_norm", 1.0), args.checkpoint,
-                          config.get("seed", 42), vocabulary_metadata=metadata)
+    train_loader = make_loader(
+        splits["train"], vocabulary, metadata, train_config.get("batch_size", 32), True
+    )
+    validation_loader = make_loader(
+        splits["validation"], vocabulary, metadata, train_config.get("batch_size", 32)
+    )
+    history = train_model(
+        model,
+        train_loader,
+        validation_loader,
+        train_config.get("epochs", 1),
+        train_config.get("learning_rate", 3e-4),
+        train_config.get("weight_decay", 1e-2),
+        str(select_device(train_config.get("device", "auto"))),
+        train_config.get("gradient_clip_norm", 1.0),
+        args.checkpoint,
+        config.get("seed", 42),
+        vocabulary_metadata=metadata,
+        selection_metric=train_config.get("selection_metric", "loss"),
+    )
     print(json.dumps(history[-1], indent=2))
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
