@@ -1,0 +1,118 @@
+{
+  "date": "2026-09-14",
+  "protocol": "Training used the existing 22500-review training split. Hyperparameters and checkpoint selection used only the 2500-review validation split. After inspecting validation histories, accuracy selection was explicitly added and the seed-43 512-token configuration was retrained. The final Transformer and fixed baseline were each evaluated once on the 25000-review test set. No parameters were changed after test evaluation.",
+  "environment": {
+    "python": "3.14.0",
+    "torch": "2.13.0+cu132",
+    "cuda": "13.2",
+    "gpu": "NVIDIA GeForce RTX 5080",
+    "driver": "610.74",
+    "packages": {
+      "numpy": "2.5.2",
+      "scikit-learn": "1.9.0",
+      "PyYAML": "6.0.3",
+      "pytest": "9.1.1",
+      "ruff": "0.16.4"
+    }
+  },
+  "split_sha256": {
+    "train": "3e67cd012d0fde77e46617ef3830efef9e85a283f97465710704752e466a7797",
+    "validation": "deff82b0a04bcd4d4a87c3fbed16056b4b28ea885aa40323e0d933d6439c34d8",
+    "test": "fea0c1844c4b8380e83b8870a52838b15243222700f30093baf97cc942362dc1"
+  },
+  "training_truncation_fraction": {
+    "128": 0.8745777777777778,
+    "256": 0.3957333333333333,
+    "512": 0.12462222222222222
+  },
+  "interrupted_run": "The initial CPU run was stopped after epoch 5 to install CUDA; its checkpoint is excluded from completed experiment comparisons.",
+  "runs": [
+    {
+      "name": "transformer_128",
+      "config": "configs/improved_transformer.yaml",
+      "local_training_checkpoint": "results/improved_transformer_gpu.pt",
+      "history": "results/improved_transformer_gpu.history.json",
+      "training_seed": 42,
+      "completed_epochs": 8,
+      "selected_epoch": 6,
+      "selection_metric": "loss",
+      "validation_accuracy": 0.8216,
+      "validation_loss": 0.4290713352203369,
+      "max_length": 128
+    },
+    {
+      "name": "transformer_256",
+      "config": "configs/improved_transformer_256.yaml",
+      "local_training_checkpoint": "results/improved_transformer_256.pt",
+      "history": "results/improved_transformer_256.history.json",
+      "training_seed": 42,
+      "completed_epochs": 10,
+      "selected_epoch": 4,
+      "selection_metric": "loss",
+      "validation_accuracy": 0.8616,
+      "validation_loss": 0.3606337815284729,
+      "max_length": 256
+    },
+    {
+      "name": "transformer_512_seed42",
+      "config": "configs/improved_transformer_512.yaml",
+      "local_training_checkpoint": "results/improved_transformer_512.pt",
+      "history": "results/improved_transformer_512.history.json",
+      "training_seed": 42,
+      "completed_epochs": 12,
+      "selected_epoch": 6,
+      "selection_metric": "loss",
+      "validation_accuracy": 0.8804,
+      "validation_loss": 0.359065145111084,
+      "max_length": 512
+    },
+    {
+      "name": "transformer_512_seed43",
+      "config": "configs/improved_transformer_512_seed43.yaml",
+      "local_training_checkpoint": "results/improved_transformer_512_seed43.pt",
+      "history": "results/improved_transformer_512_seed43.history.json",
+      "training_seed": 43,
+      "completed_epochs": 12,
+      "selected_epoch": 4,
+      "selection_metric": "loss",
+      "validation_accuracy": 0.8804,
+      "validation_loss": 0.3411074600219727,
+      "max_length": 512
+    },
+    {
+      "name": "baseline_512",
+      "config": "configs/improved_baseline_512.yaml",
+      "local_training_checkpoint": "results/improved_baseline_512.pt",
+      "history": "results/improved_baseline_512.history.json",
+      "training_seed": 42,
+      "completed_epochs": 12,
+      "selected_epoch": 3,
+      "selection_metric": "loss",
+      "validation_accuracy": 0.878,
+      "validation_loss": 0.3037727316379547,
+      "max_length": 512
+    },
+    {
+      "name": "recommended_transformer",
+      "config": "configs/recommended.yaml",
+      "local_training_checkpoint": "results/improved_recommended.pt",
+      "history": "results/improved_recommended.history.json",
+      "training_seed": 43,
+      "completed_epochs": 12,
+      "selected_epoch": 9,
+      "selection_metric": "accuracy",
+      "validation_accuracy": 0.892,
+      "validation_loss": 0.3763452519416809,
+      "max_length": 512
+    }
+  ],
+  "final_test_reports": {
+    "transformer": "results/recommended_evaluation.json",
+    "baseline": "results/improved_baseline_evaluation.json"
+  },
+  "export": {
+    "directory": "results/recommended",
+    "checkpoint_sha256": "71eb416d6343fe63e1672af6f59a2308661056fef17e308bc6a92afd35e2a4ad",
+    "checkpoint_bytes": 25746393
+  }
+}

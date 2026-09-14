@@ -1,0 +1,14 @@
+seed: 42
+model:
+  type: baseline
+  embedding_dimension: 128
+  hidden_dimension: 128
+  dropout: 0.3
+training:
+  epochs: 12
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  device: auto
+  threads: 4
