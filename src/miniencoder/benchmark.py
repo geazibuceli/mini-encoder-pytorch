@@ -34,7 +34,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--iterations", type=int, default=10)
     args = parser.parse_args()
-    metadata, vocabulary, splits = read_prepared_data(args.data_dir)
+    metadata, vocabulary, splits = read_prepared_data(args.data_dir, split_names=("test",))
     model, _ = load_model(args.checkpoint, vocabulary)
     batch = next(iter(make_loader(splits["test"], vocabulary, metadata, args.batch_size)))
     result = benchmark_model(model, batch, args.iterations)

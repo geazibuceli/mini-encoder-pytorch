@@ -8,7 +8,7 @@ from .train import run_epoch
 
 
 def evaluate_checkpoint(checkpoint, data_dir, output, batch_size=32, device="cpu"):
-    metadata, vocabulary, splits = read_prepared_data(data_dir)
+    metadata, vocabulary, splits = read_prepared_data(data_dir, split_names=("test",))
     model, _ = load_model(checkpoint, vocabulary, device)
     loader = make_loader(splits["test"], vocabulary, metadata, batch_size)
     result = run_epoch(model, loader, None, device)

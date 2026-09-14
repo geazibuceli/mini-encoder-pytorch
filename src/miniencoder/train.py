@@ -85,7 +85,7 @@ def main():
     args = parser.parse_args()
     config = validate_config(load_config(args.config))
     from .pipeline import make_loader, read_prepared_data
-    metadata, vocabulary, splits = read_prepared_data(args.data_dir)
+    metadata, vocabulary, splits = read_prepared_data(args.data_dir, split_names=("train", "validation"))
     model_config = config.setdefault("model", {})
     model_config.setdefault("max_length", metadata["max_length"])
     if (model_config.get("type", "transformer") != "baseline"

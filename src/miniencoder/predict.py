@@ -14,7 +14,7 @@ def main():
     parser.add_argument("--data-dir", default="data/processed")
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
-    metadata, vocabulary, _ = read_prepared_data(args.data_dir)
+    metadata, vocabulary, _ = read_prepared_data(args.data_dir, split_names=())
     model, payload = load_model(args.checkpoint, vocabulary, args.device)
     item = SentimentDataset([args.review], [0], RegexTokenizer(metadata.get("lowercase", True)), vocabulary,
                             metadata["max_length"])[0]

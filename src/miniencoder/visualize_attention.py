@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--layer", type=int, default=0)
     parser.add_argument("--head", type=int, default=0)
     args = parser.parse_args()
-    metadata, vocabulary, _ = read_prepared_data(args.data_dir)
+    metadata, vocabulary, _ = read_prepared_data(args.data_dir, split_names=())
     model, payload = load_model(args.checkpoint, vocabulary, "cpu")
     if payload["model_config"].get("attention_backend") != "manual":
         raise SystemExit("Attention visualization requires a manual-attention checkpoint.")

@@ -11,12 +11,15 @@ from .tokenizer import RegexTokenizer, Vocabulary
 from .train import build_model
 
 
-def read_prepared_data(data_dir):
+def read_prepared_data(data_dir, split_names=("train", "validation", "test")):
+    """Read shared artifacts and only the requested dataset splits."""
     root = Path(data_dir)
     metadata = json.loads((root / "metadata.json").read_text(encoding="utf-8"))
     vocabulary = Vocabulary.load(root / "vocabulary.json")
     splits = {}
-    for name in ("train", "validation", "test"):
+    for name in split_names:
+        if name not in {"train", "validation", "test"}:
+            raise ValueError(f"Unknown dataset split: {name}")
         path = root / f"{name}.jsonl"
         splits[name] = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     return metadata, vocabulary, splits
