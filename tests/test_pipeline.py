@@ -6,9 +6,9 @@ import pytest
 from miniencoder.baselines import MeanEmbeddingClassifier
 from miniencoder.checkpoint import save_checkpoint
 from miniencoder.evaluate import evaluate_checkpoint
-from miniencoder.pipeline import read_prepared_data
+from miniencoder.pipeline import load_model, read_prepared_data
 from miniencoder.predict import main
-from miniencoder.tokenizer import RegexTokenizer, build_vocabulary
+from miniencoder.tokenizer import RegexTokenizer, Vocabulary, build_vocabulary
 
 
 @pytest.fixture
@@ -21,8 +21,18 @@ def artifacts(tmp_path):
 
 
 def test_prediction_without_dataset_splits(artifacts, monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["predict", "good movie", "--checkpoint", str(artifacts / "model.pt"),
-                                     "--data-dir", str(artifacts)])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "predict",
+            "good movie",
+            "--checkpoint",
+            str(artifacts / "model.pt"),
+            "--data-dir",
+            str(artifacts),
+        ],
+    )
     main()
     assert "Prediction:" in capsys.readouterr().out
 
@@ -46,3 +56,44 @@ def test_default_loads_all_splits(artifacts):
 def test_unknown_split_rejected(artifacts):
     with pytest.raises(ValueError, match="Unknown dataset split"):
         read_prepared_data(artifacts, split_names=("missing",))
+
+
+def test_checkpoint_rejects_mismatched_preprocessing(artifacts):
+    vocabulary = Vocabulary.load(artifacts / "vocabulary.json")
+    path = artifacts / "verified.pt"
+    save_checkpoint(
+        path,
+        MeanEmbeddingClassifier(len(vocabulary.token_to_id)),
+        vocabulary_metadata={
+            "vocabulary_sha256": vocabulary.fingerprint(),
+            "lowercase": True,
+            "max_length": 8,
+        },
+    )
+    swapped = dict(vocabulary.token_to_id)
+    swapped["good"], swapped["bad"] = swapped["bad"], swapped["good"]
+    with pytest.raises(ValueError, match="Vocabulary"):
+        load_model(path, Vocabulary(swapped))
+    with pytest.raises(ValueError, match="lowercase"):
+        load_model(path, vocabulary, metadata={"max_length": 8, "lowercase": False})
+    with pytest.raises(ValueError, match="max_length"):
+        load_model(path, vocabulary, metadata={"max_length": 16, "lowercase": True})
+    load_model(path, vocabulary, metadata={"max_length": 8, "lowercase": True})
+
+
+def test_export_bundle_without_dataset(artifacts):
+    import torch
+
+    from miniencoder.export import export_checkpoint
+
+    output = artifacts / "bundle"
+    checkpoint = export_checkpoint(artifacts / "model.pt", artifacts, output)
+    metadata, vocabulary, splits = read_prepared_data(output, split_names=())
+    original, _ = load_model(artifacts / "model.pt", vocabulary)
+    restored, payload = load_model(checkpoint, vocabulary, metadata=metadata)
+    ids = torch.tensor([[2, 3, 4]])
+    mask = torch.ones_like(ids, dtype=torch.bool)
+    torch.testing.assert_close(original(ids, mask), restored(ids, mask))
+    assert not splits
+    assert payload["optimizer_state"] is None
+    assert payload["vocabulary_metadata"]["vocabulary_sha256"] == vocabulary.fingerprint()

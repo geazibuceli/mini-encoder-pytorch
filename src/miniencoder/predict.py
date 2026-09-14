@@ -15,11 +15,19 @@ def main():
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
     metadata, vocabulary, _ = read_prepared_data(args.data_dir, split_names=())
-    model, payload = load_model(args.checkpoint, vocabulary, args.device)
-    item = SentimentDataset([args.review], [0], RegexTokenizer(metadata.get("lowercase", True)), vocabulary,
-                            metadata["max_length"])[0]
+    model, payload = load_model(args.checkpoint, vocabulary, args.device, metadata=metadata)
+    item = SentimentDataset(
+        [args.review],
+        [0],
+        RegexTokenizer(metadata.get("lowercase", True)),
+        vocabulary,
+        metadata["max_length"],
+    )[0]
     with torch.inference_mode():
-        logits = model(item["input_ids"].unsqueeze(0).to(args.device), item["attention_mask"].unsqueeze(0).to(args.device))
+        logits = model(
+            item["input_ids"].unsqueeze(0).to(args.device),
+            item["attention_mask"].unsqueeze(0).to(args.device),
+        )
         probabilities = torch.softmax(logits, dim=-1)[0]
     label = int(probabilities.argmax())
     print(f"Prediction: {'Positive' if label else 'Negative'}")
@@ -28,4 +36,5 @@ def main():
     print(f"Attention backend: {payload['model_config'].get('attention_backend', 'none').upper()}")
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()

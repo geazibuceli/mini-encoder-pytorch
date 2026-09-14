@@ -19,12 +19,20 @@ def main():
     parser.add_argument("--head", type=int, default=0)
     args = parser.parse_args()
     metadata, vocabulary, _ = read_prepared_data(args.data_dir, split_names=())
-    model, payload = load_model(args.checkpoint, vocabulary, "cpu")
+    model, payload = load_model(args.checkpoint, vocabulary, "cpu", metadata=metadata)
     if payload["model_config"].get("attention_backend") != "manual":
         raise SystemExit("Attention visualization requires a manual-attention checkpoint.")
-    item = SentimentDataset([args.review], [0], RegexTokenizer(), vocabulary, metadata["max_length"])[0]
+    item = SentimentDataset(
+        [args.review],
+        [0],
+        RegexTokenizer(metadata.get("lowercase", True)),
+        vocabulary,
+        metadata["max_length"],
+    )[0]
     with torch.inference_mode():
-        _, attention = model(item["input_ids"].unsqueeze(0), item["attention_mask"].unsqueeze(0), True)
+        _, attention = model(
+            item["input_ids"].unsqueeze(0), item["attention_mask"].unsqueeze(0), True
+        )
     length = int(item["attention_mask"].sum())
     tokens = vocabulary.decode(item["input_ids"][:length])
     matrix = attention[args.layer][0, args.head, :length, :length].numpy()
@@ -38,4 +46,5 @@ def main():
     print(f"Saved attention heatmap to {args.output}")
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()

@@ -26,14 +26,30 @@ def read_prepared_data(data_dir, split_names=("train", "validation", "test")):
 
 
 def make_loader(records, vocabulary, metadata, batch_size=32, shuffle=False):
-    dataset = SentimentDataset([item["text"] for item in records], [item["label"] for item in records],
-                               RegexTokenizer(metadata.get("lowercase", True)), vocabulary,
-                               metadata["max_length"])
+    dataset = SentimentDataset(
+        [item["text"] for item in records],
+        [item["label"] for item in records],
+        RegexTokenizer(metadata.get("lowercase", True)),
+        vocabulary,
+        metadata["max_length"],
+    )
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn)
 
 
-def load_model(checkpoint_path, vocabulary, device="cpu"):
-    payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+def load_model(checkpoint_path, vocabulary, device="cpu", metadata=None):
+    payload = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    saved = payload.get("vocabulary_metadata") or {}
+    if saved.get("tokenizer", "regex-v1") != "regex-v1":
+        raise ValueError("Checkpoint tokenizer is not supported by this runtime.")
+    if saved.get("vocabulary_sha256") and saved["vocabulary_sha256"] != vocabulary.fingerprint():
+        raise ValueError("Vocabulary does not match the checkpoint.")
+    if metadata is not None:
+        for key in ("max_length", "lowercase"):
+            if (
+                key in saved
+                and metadata.get(key, True if key == "lowercase" else None) != saved[key]
+            ):
+                raise ValueError(f"Preprocessing {key} does not match the checkpoint.")
     config = {"model": payload["model_config"]}
     model = build_model(config, len(vocabulary.token_to_id), vocabulary.pad_id).to(device)
     model.load_state_dict(payload["model_state"])
