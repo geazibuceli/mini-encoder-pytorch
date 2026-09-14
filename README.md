@@ -1,17 +1,17 @@
 # MiniEncoder PyTorch
 
-Classificador educacional de sentimentos para IMDB, com Transformer e baseline de media de embeddings.
+An educational sentiment classifier for IMDB, featuring a Transformer and a mean-embedding baseline.
 
-## Instalacao
+## Installation
 
-Execute nesta pasta, com Python 3.10 ou superior:
+Run the following commands from this directory using Python 3.10 or later:
 
 ```powershell
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev,data,visualization]"
 ```
 
-## Uso
+## Usage
 
 ```powershell
 .venv/Scripts/python.exe -m miniencoder.doctor
@@ -22,19 +22,19 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-Os dados preparados existentes podem ser usados sem executar `prepare_data` (que baixa IMDB).
-O comprimento do modelo e inferido dos metadados dos dados quando `model.max_length` e omitido.
-Uma capacidade explicitamente menor e rejeitada antes do treinamento.
-O checkpoint salva a epoca de menor perda de validacao, com configuracao do modelo e estados do otimizador e scheduler.
-O historico dentro dele termina na epoca selecionada; a CLI imprime os resultados da ultima epoca executada.
+Existing prepared data can be used without running `prepare_data`, which downloads IMDB.
+The model's sequence capacity is inferred from the data metadata when `model.max_length` is omitted.
+An explicitly configured capacity smaller than the prepared sequence length is rejected before training.
+The checkpoint stores the epoch with the lowest validation loss, including the model configuration and optimizer and scheduler states.
+Its training history ends at the selected epoch; the CLI prints the results of the final training epoch.
 
-Para treinar via API, chame `set_seed(seed)` antes de construir o modelo e passe a mesma seed a `train_model`.
-`train_model` nao reinicializa os pesos de modelos existentes. Seu modelo em memoria permanece na ultima epoca;
-carregue o checkpoint salvo para usar a melhor epoca. A reproducibilidade entre dispositivos e versoes distintas nao e garantida.
+When training through the API, call `set_seed(seed)` before constructing the model and pass the same seed to `train_model`.
+`train_model` does not reinitialize existing model weights. The model in memory retains the final epoch's weights;
+load the saved checkpoint to use the best epoch. Reproducibility across different devices and versions is not guaranteed.
 
-## Estrutura recuperada
+## Recovered Project Structure
 
-O codigo mantido fica em `src/miniencoder`. Ele foi recuperado da copia que existia em `build/lib`.
-Os testes em `tests` sao novos testes de regressao: os fontes dos testes originais nao estavam presentes.
-`build/lib` e os caches antigos foram preservados e nao devem ser usados como fonte de desenvolvimento.
-Os checkpoints e relatorios antigos foram preservados; as correcoes nao retreinam esses modelos automaticamente.
+The maintained source code lives in `src/miniencoder`. It was recovered from the existing copy in `build/lib`.
+The tests in `tests` are new regression tests; the original test source files were missing.
+`build/lib` and the old caches were preserved and should not be used as development sources.
+Existing checkpoints and reports were preserved; these fixes do not automatically retrain those models.
