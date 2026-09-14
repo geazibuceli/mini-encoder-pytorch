@@ -1,0 +1,15 @@
+seed: 42
+model:
+  type: transformer
+  embedding_dimension: 64
+  heads: 4
+  layers: 2
+  feedforward_dimension: 128
+  dropout: 0.1
+  pooling: cls
+  attention_backend: manual
+training:
+  epochs: 1
+  batch_size: 32
+  learning_rate: 0.0003
+  device: auto
